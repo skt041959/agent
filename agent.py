@@ -1,8 +1,11 @@
 #!/usr/bin/env python2
+#coding=utf8
 
 import sys
+import random
 
 di = {'nw':0, 'n':1, 'ne':2, 'w':3, 'e':4, 'sw':5, 's':6, 'se':7}
+MAX = 2
 
 class Round():
     def __init__(self, p1=False, p2=False, p3=False, p4=False, p6=False, p7=False, p8=False, p9=False, p=[]):
@@ -32,7 +35,8 @@ class Mesh():
         self.w = width
         self.m = MeshMatrix
 
-    def probeRount(self, coor):
+    def probeRount(self):
+        global coor
         x = coor[0]
         y = coor[1]
         t = [False for e in range(8)]
@@ -46,41 +50,81 @@ class Mesh():
                     t[n] = False
         r = Round(t)
         return r
+    def isEdge(self, c):
+        pass
+
+class func():
+    def __init__(self):
+        self.reval = None
+
+class func_prob(func):
+    def __init__(self, direction):
+        self.dire = direction
+
+    @property
+    def reval(self):
+        global coor
+        global moved
+        print "func_prob\n"
+        if moved:
+            r = mat.probeRount()
+            moved = False
+        if self.dire == "true":
+            return True
+        elif self.dire == "false":
+            return False
+        else:
+            return r.env[di[self.dire]]
 
 class func_logic():
     def __init__(self, logic_type=""):
-        if not logic_type:
-            pass
+        self.type = logic_type
+        self.child1 = func()
+        self.child2 = func()
+        if self.type == 'and':
+            self.reval = property(self.reval_and)
+        elif self.type == 'or':
+            self.reval = property(self.reval_or)
+        elif self.type == 'not':
+            self.reval = property(self.reval_not)
+        elif self.type == 'branch':
+            self.cond = func()
+            self.reval = property(self.reval_branch)
+
+    def reval_and(self):
+        return self.child1.reval and self.child2.reval
+
+    def reval_or(self):
+        return self.child1.reval or self.child2.reval
+
+    def reval_not(self):
+        return not self.child1.reval
+
+    def reval_branch(self):
+        if self.cond.reval():
+            return self.child1.reval
         else:
-            self.type = logic_type
-            self.child1 = func_logic()
-            self.child2 = func_logic()
+            return self.child2.reval
+
+class func_branch():
+    def __init__(self):
+        self.cond = func()
+        self.eval1 = func()
+        self.eval2 = func()
 
     def reval(self, coor):
-        if self.type == 'and':
-            return self.child1.reval(coor) and self.child2.reval(coor)
-        elif self.type == 'or':
-            return self.child1.reval(coor) or self.child2.reval(coor)
-        elif self.type == 'not':
-            return self.child1.reval(coor)
-
-class func_if():
-    def __init__(self):
-        self.cond = func_logic()
-        self.move1 = func_action()
-        self.move2 = func_action()
-
-    def eval(self, coor):
-        if self.cond.reval(coor):
-            self.move1.eval(coor)
+        print "func_branch\n"
+        if self.cond.reval:
+            self.eval1.reval(coor)
         else:
-            self.move2.eval(coor)
+            self.eval2.reval(coor)
 
-class func_action():
+class func_move():
     def __init__(self, direction=""):
         self.dire = direction
 
-    def eval(self, coor):
+    def reval(self, coor):
+        print "func_action\n"
         if self.dire == 'north':
             coor[1]-=1
         elif self.dire == 'south':
@@ -89,15 +133,6 @@ class func_action():
             coor[0]-=1
         elif self.dire == 'east':
             coor[0]+=1
-
-
-class func_prob(func_logic):
-    def __init__(self, direction):
-        self.dire = direction
-
-    def reval(self, coor):
-        r = mat.probeRount(coor)
-        return r.env[di[self.dire]]
 
 def CreateMeshfromfile(filename):
     f = open(filename,'r')
@@ -113,14 +148,75 @@ def CreateMeshfromfile(filename):
     m = Mesh(l, w, s)
     return m
 
-def fitness_check(func, MeshMatrix):
-    func.eval([3,3])
+def fitness_check(root_func):
+    global count
+    global coor
+    x = list()
+    y = list()
+    for i in range(10):
+        x.append(random.randrange(0, mat.w))
+        y.append(random.randrange(0, mat.l))
+        for t in range(60):
+            coor = [x,y]
+            root_func.reval()
+            if isEdge(coor):
+                count+=1
 
-#def main():
-    #pass
+def generate_random_branch(depth):
+    r = func_branch()
+    depth +=1
+    r.eval1 = func_move(random.choice(directions))
+    r.cond = generate_random_logic(depth)
+    if depth < MAX and random.randrange(1):
+        r.eval2 = generate_random_branch(depth)
+    else:
+        r.eval2 = func_move(random.choice(directions))
+
+def generate_random_logic(depth):
+    if depth < MAX:
+        n1 = func_logic(random.choice(logics))
+        if n1.type == "branch":
+            depth+=1
+            n1.cond = generate_random_logic(depth)
+            n1.child1 = generate_random_logic(depth)
+            n1.child2 = generate_random_logic(depth)
+        elif n1.type == "and" or n1.type == "or":
+            n1.child1 = generate_random_logic(depth)
+            n1.child2 = generate_random_logic(depth)
+        else:
+            n1.child1 = generate_random_logic(depth)
+    else:
+        n1 = func_logic(random.choice(logics[:-1]))
+        if n1.type == "and" or n1.type == "or":
+            n1.child1 = generate_random_logic(depth)
+            n1.child2 = generate_random_logic(depth)
+        else:
+            n1.child1 = generate_random_logic(depth)
+    return n1
 
 if __name__ == "__main__":
     mat = CreateMeshfromfile(sys.argv[1])
+    moved = True
+    p1 = func_prob('nw')
+    p2 = func_prob('n')
+    p3 = func_prob('ne')
+    p4 = func_prob('w')
+    p6 = func_prob('e')
+    p7 = func_prob('sw')
+    p8 = func_prob('s')
+    p9 = func_prob('se')
+    p_t = func_prob('true')
+    p_f = func_prob('false')
+    probs=[p1,p2,p3,p4,p6,p7,p8,p9,p_t,p_f]
+    logics=['and', 'or', 'not', 'branch']
+    directions=['east', 'west', 'south', 'north']
+    orientations=['nw', 'n', 'ne', 's', 'e', 'sw', 's', 'se']
+
+    for i in range(5000):
+        count = 0
+        root = generate_random_branch(0)
+        fitness_check(root)
+
     n1 = func_logic('and')
     n2 = func_logic('or')
     n3 = func_logic('not')
@@ -130,22 +226,13 @@ if __name__ == "__main__":
     n7 = func_logic('and')
     n8 = func_logic('or')
     n9 = func_logic('not')
-    m1 = func_action('north')
-    m2 = func_action('south')
-    m3 = func_action('west')
-    m4 = func_action('east')
-    f1 = func_if()
-    f2 = func_if()
-    f3 = func_if()
-    p1 = func_prob('n')
-    p2 = func_prob('ne')
-    p3 = func_prob('e')
-    p4 = func_prob('e')
-    p5 = func_prob('se')
-    p6 = func_prob('s')
-    p7 = func_prob('s')
-    p8 = func_prob('sw')
-    p9 = func_prob('w')
+    m1 = func_move('north')
+    m2 = func_move('south')
+    m3 = func_move('west')
+    m4 = func_move('east')
+    f1 = func_branch()
+    f2 = func_branch()
+    f3 = func_branch()
     f1.cond = n1
     n1.child1 = n2
     n2.child1 = p1
@@ -169,5 +256,4 @@ if __name__ == "__main__":
     n7.child2 = p9
     f3.move1 = m3
     f3.move2 = m1
-    fitness_check(f1,mat)
 
