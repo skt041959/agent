@@ -229,7 +229,7 @@ def cross(p1, p2):
     pt1 = None
     pt2 = None
     while stack_p1 or nt is p1:
-        if not isinstance(nt, func_prob) and not isinstance(nt, func_move):
+        if (not isinstance(nt, func_prob)) and (not isinstance(nt, func_move)):
             if not randrange(10):
                 pt2 = nt
                 break
@@ -249,7 +249,7 @@ def cross(p1, p2):
     nt = p2
     t=-1
     while stack_p2 or nt is p2:
-        if not isinstance(nt, func_prob):
+        if (not isinstance(nt, func_prob)) and (not isinstance(nt, func_move)):
             if not randrange(10):
                 pt2 = stack_p2.pop()
                 break
@@ -267,6 +267,45 @@ def cross(p1, p2):
             nt = stack_p1.pop()
             t = -1
     pt2[t]=pt1
+
+def copy(root):
+    stack=[]
+    stack_new=[]
+    nt = root
+    if isinstance(nt, func_branch):
+        nnt = func_branch()
+    t = -1
+    while stack or nt is root:
+        if (not isinstance(nt, func_move)) and (not isinstance(nt, func_prob)):
+            stack.append(nt)
+            try:
+                t+=1
+                nt = nt[t]
+            except IndexError:
+                nt = stack.pop()
+                nnt = stack_new.pop()
+                t = -1
+                continue
+            else:
+                try:
+                    nnt = nnt[t]
+                except IndexError:
+                    stack_new.append(nnt)
+                    if isinstance(nt, func_branch):
+                        nnt = func_branch()
+                    elif isinstance(nt, func_logic):
+                        nnt = func_logic(nt.type)
+                    elif isinstance(nt, func_move):
+                        nnt = func_move(nt.type)
+                    elif isinstance(nt, func_prob):
+                        nnt = func_prob(nt.type)
+                    stack_new[-1][t] = nnt
+                nnt = stack_new.pop()
+        else:
+            nt = stack.pop()
+            nnt = stack_new.pop()
+            t = -1
+    return nnt
 
 def fitness_check(root_func):
     global coor
@@ -312,6 +351,7 @@ def main():
         print len(generation_0_list)
 
 if __name__ == "__main__":
+
     mat = CreateMeshfromfile(sys.argv[1])
 
     logics=['and', 'or', 'not', 'branch']
